@@ -1,4 +1,4 @@
-module github.com/viney-shih/goroutine
+module github.com/viney-shih/goroutines
 
 go 1.14
 
