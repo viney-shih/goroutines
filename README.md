@@ -4,7 +4,7 @@
 [![GoDev](https://img.shields.io/badge/go.dev-doc-007d9c?style=flat-square&logo=read-the-docs)](https://pkg.go.dev/github.com/viney-shih/goroutines?tab=doc)
 [![Build Status](https://travis-ci.com/viney-shih/goroutines.svg?branch=master)](https://travis-ci.com/github/viney-shih/goroutines)
 [![Go Report Card](https://goreportcard.com/badge/github.com/viney-shih/goroutines)](https://goreportcard.com/report/github.com/viney-shih/goroutines)
-[![Codecov](https://codecov.io/gh/viney-shih/go-lock/branch/master/graph/badge.svg)](https://codecov.io/gh/viney-shih/goroutines)
+[![codecov](https://codecov.io/gh/viney-shih/goroutines/branch/master/graph/badge.svg)](https://codecov.io/gh/viney-shih/goroutines)
 [![Coverage Status](https://coveralls.io/repos/github/viney-shih/goroutines/badge.svg?branch=master)](https://coveralls.io/github/viney-shih/goroutines?branch=master)
 [![License](http://img.shields.io/badge/License-Apache_2-red.svg?style=flat)](http://www.apache.org/licenses/LICENSE-2.0)
 [![Sourcegraph](https://sourcegraph.com/github.com/viney-shih/goroutines/-/badge.svg)](https://sourcegraph.com/github.com/viney-shih/goroutines?badge)
