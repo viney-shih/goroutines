@@ -3,6 +3,7 @@ package goroutines
 import (
 	"runtime"
 	"sort"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -137,6 +138,27 @@ func (s *batchSuite) TestQueueAllAndTerminate() {
 func (s *batchSuite) TestDoNothing() {
 	b := NewBatch(100)
 	b.Close()
+}
+
+func (s *batchSuite) TestWaitAllAndGracefulClose() {
+	taskN := 100
+	b := NewBatch(3, WithBatchSize(taskN))
+	wg := &sync.WaitGroup{}
+
+	for i := 0; i < taskN; i++ {
+		wg.Add(1)
+		idx := i
+		b.Queue(func() (interface{}, error) {
+			defer wg.Done()
+			return idx, nil
+		})
+	}
+
+	b.QueueComplete()
+	b.WaitAll()
+	b.GracefulClose()
+
+	wg.Wait()
 }
 
 func (s *batchSuite) TestQueueComplete() {
