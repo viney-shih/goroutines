@@ -1,6 +1,7 @@
 package goroutines
 
 import (
+	"context"
 	"errors"
 	"sync"
 )
@@ -8,6 +9,8 @@ import (
 var (
 	// ErrQueueComplete indicates no more incoming tasks allowed to put in the pool
 	ErrQueueComplete = errors.New("queue has completed already")
+	// ErrQueueCTXDone indicates context in queue is done due to timeout or cancellation.
+	ErrQueueCTXDone = errors.New("context in queue is done")
 )
 
 // Result is the interface returned by Results()
@@ -25,6 +28,9 @@ type BatchFunc func() (interface{}, error)
 type Batch interface {
 	// Queue queues a task to be run in the pool and starts processing immediately
 	Queue(fn BatchFunc) error
+	// QueueWithContext queues a task to be run in the pool, or return ErrQueueCTXDone
+	// because ctx is done (timeout or cancellation).
+	QueueWithContext(ctx context.Context, fn BatchFunc) error
 	// QueueComplete means finishing queuing tasks
 	QueueComplete()
 	// Results returns a Result channel that will output all
@@ -126,6 +132,16 @@ func (r *result) Error() error {
 // Queue plays as a producer to put a task into pool.
 // HINT: make sure not to call QueueComplete concurrently
 func (b *batch) Queue(fn BatchFunc) error {
+	return b.queue(context.Background(), fn)
+}
+
+// QueueWithContext plays as a producer to put a task into pool.
+// HINT: make sure not to call QueueComplete concurrently
+func (b *batch) QueueWithContext(ctx context.Context, fn BatchFunc) error {
+	return b.queue(ctx, fn)
+}
+
+func (b *batch) queue(ctx context.Context, fn BatchFunc) error {
 	// The first try-receive operation is to try to exit the goroutine
 	// as early as possible. It is not essential but a good practice to handle
 	// racing case continue putting task in queue.
@@ -138,6 +154,18 @@ func (b *batch) Queue(fn BatchFunc) error {
 	select {
 	case <-b.completeChan:
 		return ErrQueueComplete
+	case <-ctx.Done():
+		// timeout or cancellation
+		return ErrQueueCTXDone
+	default:
+	}
+
+	select {
+	case <-b.completeChan:
+		return ErrQueueComplete
+	case <-ctx.Done():
+		// timeout or cancellation
+		return ErrQueueCTXDone
 	case b.inputChan <- &input{fn: fn}:
 		return nil
 	}

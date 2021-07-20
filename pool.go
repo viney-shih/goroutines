@@ -1,6 +1,7 @@
 package goroutines
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"time"
@@ -18,11 +19,16 @@ type TaskFunc func()
 
 // Pool is the interface handling the interacetion with asynchronous goroutines
 type Pool interface {
-	// Schedule schedules the task to be executed over by worker in the Pool.
+	// Schedule schedules the task to be executed by the workers in the Pool.
+	// It will be blocked until the works accepting the request.
 	Schedule(task TaskFunc) error
-	// ScheduleWithTimeout schedules the task to be executed by the worker
+	// ScheduleWithTimeout schedules the task to be executed by the workers
 	// in the Pool within the specified period. Or return ErrScheduleTimeout.
 	ScheduleWithTimeout(timeout time.Duration, task TaskFunc) error
+	// ScheduleWithContext schedules the task to be executed by the workers
+	// in the Pool. It will be blocked until works accepting the request, or
+	// return ErrScheduleTimeout because ctx is done (timeout or cancellation).
+	ScheduleWithContext(ctx context.Context, task TaskFunc) error
 	// Release will terminate all workers finishing what they are working on ASAP.
 	Release()
 	// Workers returns the numbers of workers created.
@@ -158,7 +164,7 @@ func (p *pool) allocWorker() *worker {
 	return w
 }
 
-func (p *pool) schedule(task TaskFunc, timeout <-chan time.Time) error {
+func (p *pool) schedule(ctx context.Context, task TaskFunc) error {
 	select {
 	case <-p.stopChan:
 		return ErrPoolRelease
@@ -169,7 +175,8 @@ func (p *pool) schedule(task TaskFunc, timeout <-chan time.Time) error {
 	select {
 	case <-p.stopChan:
 		return ErrPoolRelease
-	case <-timeout:
+	case <-ctx.Done():
+		// timeout or cancellation
 		return ErrScheduleTimeout
 	case p.taskQueueChan <- task:
 		return nil
@@ -179,7 +186,8 @@ func (p *pool) schedule(task TaskFunc, timeout <-chan time.Time) error {
 	select {
 	case <-p.stopChan:
 		return ErrPoolRelease
-	case <-timeout:
+	case <-ctx.Done():
+		// timeout or cancellation
 		return ErrScheduleTimeout
 	case p.taskQueueChan <- task:
 		return nil
@@ -195,14 +203,18 @@ func (p *pool) schedule(task TaskFunc, timeout <-chan time.Time) error {
 }
 
 func (p *pool) Schedule(task TaskFunc) error {
-	return p.schedule(task, nil)
+	return p.schedule(context.Background(), task)
 }
 
 func (p *pool) ScheduleWithTimeout(timeout time.Duration, task TaskFunc) error {
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 
-	return p.schedule(task, timer.C)
+	return p.schedule(ctx, task)
+}
+
+func (p *pool) ScheduleWithContext(ctx context.Context, task TaskFunc) error {
+	return p.schedule(ctx, task)
 }
 
 func (p *pool) Release() {

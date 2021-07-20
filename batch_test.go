@@ -186,7 +186,7 @@ func f(i int) BatchFunc {
 }
 
 func (s *batchSuite) TestGoroutineLeakNoTimeout() {
-	// s.T().Skip("skip leak test")
+	s.T().Skip("skip leak test")
 	before := runtime.NumGoroutine()
 
 	batchSize := 40
@@ -210,7 +210,7 @@ func (s *batchSuite) TestGoroutineLeakNoTimeout() {
 }
 
 func (s *batchSuite) TestGoroutineLeakWithTimeout() {
-	// s.T().Skip("skip leak test")
+	s.T().Skip("skip leak test")
 	before := runtime.NumGoroutine()
 
 	batchSize := 40
