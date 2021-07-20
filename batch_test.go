@@ -186,47 +186,40 @@ func f(i int) BatchFunc {
 }
 
 func (s *batchSuite) TestGoroutineLeakNoTimeout() {
-	s.T().Skip("skip leak test")
+	s.T().Skip("skip leak test") // only works well without `-race`
 	before := runtime.NumGoroutine()
 
 	batchSize := 40
-	for n := 0; n < 1; n++ {
-		batch := NewBatch(40, WithBatchSize(batchSize))
+	for n := 0; n < 5; n++ {
+		b := NewBatch(batchSize, WithBatchSize(batchSize))
 		for i := 0; i < batchSize; i++ {
-			batch.Queue(f(i))
+			b.Queue(f(i))
 		}
-		batch.QueueComplete()
-		results := []int{}
-		for i := 0; i < batchSize; i++ {
-			select {
-			case ret := <-batch.Results():
-				results = append(results, ret.Value().(int))
-			}
-		}
-		batch.Close()
+		b.QueueComplete()
+
+		b.WaitAll()
+		b.Close()
 	}
 
 	s.Require().Equal(before, runtime.NumGoroutine())
 }
 
 func (s *batchSuite) TestGoroutineLeakWithTimeout() {
-	s.T().Skip("skip leak test")
+	s.T().Skip("skip leak test") // only works well without `-race`
 	before := runtime.NumGoroutine()
 
 	batchSize := 40
-	for n := 0; n < 4; n++ {
+	for n := 0; n < 5; n++ {
 		timer := time.After(1 * time.Second)
 		batch := NewBatch(40, WithBatchSize(batchSize))
 		for i := 0; i < batchSize; i++ {
 			batch.Queue(f(i))
 		}
 		batch.QueueComplete()
-		results := []int{}
 	resultsLoop:
 		for i := 0; i < batchSize; i++ {
 			select {
-			case ret := <-batch.Results():
-				results = append(results, ret.Value().(int))
+			case <-batch.Results():
 			case <-timer:
 				break resultsLoop
 			}
