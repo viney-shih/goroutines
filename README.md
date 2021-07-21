@@ -11,7 +11,7 @@
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fviney-shih%2Fgoroutines.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fviney-shih%2Fgoroutines?ref=badge_shield)
 
 <p align="center">
-  <img src="logo.png" title="Goroutines" />
+  <img src="assets/logo.png" title="Goroutines" />
 </p>
 
 Package **goroutines** is an efficient, flexible, and lightweight goroutine pool written in Go. It provides a easy way to deal with several kinds of concurrent tasks with limited resource. 
