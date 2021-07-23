@@ -1,6 +1,5 @@
 # goroutines
 
-[![GoDoc](https://godoc.org/github.com/viney-shih/goroutines?status.svg)](https://godoc.org/github.com/viney-shih/goroutines)
 [![GoDev](https://img.shields.io/badge/go.dev-doc-007d9c?style=flat-square&logo=read-the-docs)](https://pkg.go.dev/github.com/viney-shih/goroutines?tab=doc)
 [![Build Status](https://travis-ci.com/viney-shih/goroutines.svg?branch=master)](https://travis-ci.com/github/viney-shih/goroutines)
 [![Go Report Card](https://goreportcard.com/badge/github.com/viney-shih/goroutines)](https://goreportcard.com/report/github.com/viney-shih/goroutines)
