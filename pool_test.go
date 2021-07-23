@@ -109,6 +109,7 @@ func (s *poolSuite) TestScheduleWithAutoScaledWorkers() {
 		<-rets
 	}
 	// now running number is taskN+1, extra one is created by miner waiting for next request
+	time.Sleep(time.Millisecond * 50)
 	s.Require().Equal(taskN+1, p.Workers())
 	s.Require().Equal(0, p.Running())
 
