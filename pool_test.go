@@ -1,6 +1,7 @@
 package goroutines
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"testing"
@@ -43,6 +44,14 @@ func (s *poolSuite) TestInvalidPreAllocWorkerNumbers() {
 	}()
 
 	NewPool(10, WithPreAllocWorkers(100))
+}
+
+func (s *poolSuite) TestPoolReleased() {
+	p := NewPool(1)
+	p.Release()
+	s.Require().Equal(ErrPoolRelease, p.Schedule(func() {
+		// it won't do anything
+	}))
 }
 
 func (s *poolSuite) TestScheduleWithFixedWorkers() {
@@ -154,6 +163,63 @@ func (s *poolSuite) TestScheduleWithTimeout() {
 	s.Require().Equal(0, p.Running())
 }
 
+func (s *poolSuite) TestScheduleWithContext() {
+	totalN := 10
+	initN := 0
+	taskN := 10
+	pause := make(chan struct{})
+	rets := make(chan struct{}, taskN)
+
+	// default number of workers is initN
+	p := NewPool(totalN, WithPreAllocWorkers(initN))
+	defer p.Release()
+	// now running is 1
+	time.Sleep(time.Millisecond * 50)
+	s.Require().Equal(initN+1, p.Workers())
+	s.Require().Equal(0, p.Running())
+
+	// full the workers
+	for i := 0; i < taskN; i++ {
+		s.Require().NoError(p.ScheduleWithTimeout(50*time.Millisecond, func() {
+			<-pause
+			rets <- struct{}{}
+		}))
+	}
+
+	time.Sleep(time.Millisecond * 50)
+	s.Require().Equal(taskN, p.Running())
+
+	// have reached the limitation, and no response until the timeout comes
+	ctxT, cancelT := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	s.Require().Equal(ErrScheduleTimeout, p.ScheduleWithContext(ctxT, func() {
+		<-pause
+		rets <- struct{}{}
+	}))
+	cancelT()
+
+	// cancel manually
+	ctxM, cancelM := context.WithCancel(context.Background())
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		s.Require().Equal(ErrScheduleTimeout, p.ScheduleWithContext(ctxM, func() {
+			<-pause
+			rets <- struct{}{}
+		}))
+	}()
+
+	time.Sleep(time.Millisecond * 50)
+	cancelM()
+	wg.Wait()
+
+	close(pause)
+	for i := 0; i < taskN; i++ {
+		<-rets
+	}
+}
+
 func (s *poolSuite) TestQueueFirstStrategy() {
 	totalN := 100
 	initN := 3
@@ -185,7 +251,7 @@ func (s *poolSuite) TestQueueFirstStrategy() {
 	s.Require().Equal(0, p.Running())
 }
 
-func (s *poolSuite) TestRecycler() {
+func (s *poolSuite) TestScheduleWithAutoScaledWorkersAndRecycler() {
 	totalN := 10
 	initN := 0
 	taskN := 10

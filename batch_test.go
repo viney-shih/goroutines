@@ -1,6 +1,7 @@
 package goroutines
 
 import (
+	"context"
 	"runtime"
 	"sort"
 	"sync"
@@ -133,6 +134,42 @@ func (s *batchSuite) TestQueueAllAndTerminate() {
 
 	// total time close to 1000/5/3*0.01 seconds
 	s.Require().Equal(terminatedPoint, len(results))
+}
+
+func (s *batchSuite) TestQueueWithContext() {
+	pause := make(chan struct{})
+	wg := &sync.WaitGroup{}
+
+	testN := defaultBatchSize + 1
+	taskN := testN + 3 // worker + queue
+	b := NewBatch(3, WithBatchSize(testN))
+	defer b.Close()
+
+	// full the workers in the pool
+	for i := 0; i < taskN; i++ {
+		wg.Add(1)
+		num := i
+
+		s.Require().NoError(b.Queue(func() (interface{}, error) {
+			defer wg.Done()
+
+			<-pause
+			return num, nil
+		}))
+	}
+
+	time.Sleep(time.Millisecond * 50)
+
+	// have reached the limitation, and no response until the timeout comes
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	s.Require().Equal(ErrQueueCTXDone, b.QueueWithContext(ctx, func() (interface{}, error) {
+		<-pause
+		return 100, nil
+	}))
+
+	close(pause)
+	wg.Wait()
 }
 
 func (s *batchSuite) TestDoNothing() {

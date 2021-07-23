@@ -45,8 +45,8 @@ type Batch interface {
 	GracefulClose()
 }
 
-// NewBatch creates a new asynchronous goroutine pool and related consumers
-// with given size, and register the consumer at the same time.
+// NewBatch creates a asynchronous goroutine pool with the given size indicating
+// total numbers of workers, and register consumers to deal with tasks past by producers.
 func NewBatch(size int, options ...BatchOption) Batch {
 	// load options
 	o := &batchOption{}
@@ -225,8 +225,8 @@ func (b *batch) terminateAll() {
 // Close will terminate all workers and close the job channel of this pool
 func (b *batch) Close() {
 	b.QueueComplete()
-	b.terminateAll()
 	b.WaitAll()
+	b.terminateAll()
 	b.pool.Release()
 }
 
