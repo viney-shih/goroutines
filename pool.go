@@ -17,29 +17,28 @@ var (
 // TaskFunc is the task function assigned by caller, running in the goroutine pool
 type TaskFunc func()
 
-// Pool is the interface handling the interacetion with asynchronous goroutines
-type Pool interface {
-	// Schedule schedules the task to be executed by the workers in the Pool.
-	// It will be blocked until the works accepting the request.
-	Schedule(task TaskFunc) error
-	// ScheduleWithTimeout schedules the task to be executed by the workers
-	// in the Pool within the specified period. Or return ErrScheduleTimeout.
-	ScheduleWithTimeout(timeout time.Duration, task TaskFunc) error
-	// ScheduleWithContext schedules the task to be executed by the workers
-	// in the Pool. It will be blocked until works accepting the request, or
-	// return ErrScheduleTimeout because ctx is done (timeout or cancellation).
-	ScheduleWithContext(ctx context.Context, task TaskFunc) error
-	// Release will terminate all workers finishing what they are working on ASAP.
-	Release()
-	// Workers returns the numbers of workers created.
-	Workers() int
-	// Running returns the number of workers running for tasks.
-	Running() int
+// Pool is the sturct handling the interacetion with asynchronous goroutines
+type Pool struct {
+	initN         int
+	totalN        int
+	scalable      bool
+	taskQueueChan chan TaskFunc
+	workerChan    chan *worker
+	wg            sync.WaitGroup
+	stopOnce      sync.Once
+	stopChan      chan struct{}
+
+	workerPool sync.Pool
+	workers    []*worker
+	workerMut  sync.Mutex
+	workerCond *sync.Cond
+
+	metric Metric
 }
 
 // NewPool creates an instance of asynchronously goroutine pool
 // with the given size which indicates total numbers of workers.
-func NewPool(size int, options ...PoolOption) Pool {
+func NewPool(size int, options ...PoolOption) *Pool {
 	// load options
 	o := loadPoolOption(options...)
 
@@ -53,7 +52,7 @@ func NewPool(size int, options ...PoolOption) Pool {
 		panic(errors.New("the number of pre-allocated workers must be less than or equal to total"))
 	}
 
-	p := pool{
+	p := Pool{
 		initN:         o.preAllocWorkers,
 		totalN:        size,
 		scalable:      o.preAllocWorkers != size, // needs helper goroutines (Miner/Recycler) to adjust the worker size
@@ -83,26 +82,58 @@ func NewPool(size int, options ...PoolOption) Pool {
 	return &p
 }
 
-type pool struct {
-	initN         int
-	totalN        int
-	scalable      bool
-	taskQueueChan chan TaskFunc
-	workerChan    chan *worker
-	wg            sync.WaitGroup
-	stopOnce      sync.Once
-	stopChan      chan struct{}
+// Schedule schedules the task to be executed by the workers in the Pool.
+// It will be blocked until the works accepting the request.
+func (p *Pool) Schedule(task TaskFunc) error {
+	return p.schedule(context.Background(), task)
+}
 
-	workerPool sync.Pool
-	workers    []*worker
-	workerMut  sync.Mutex
-	workerCond *sync.Cond
+// ScheduleWithTimeout schedules the task to be executed by the workers
+// in the Pool within the specified period. Or return ErrScheduleTimeout.
+func (p *Pool) ScheduleWithTimeout(timeout time.Duration, task TaskFunc) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 
-	metric Metric
+	return p.schedule(ctx, task)
+}
+
+// ScheduleWithContext schedules the task to be executed by the workers
+// in the Pool. It will be blocked until works accepting the request, or
+// return ErrScheduleTimeout because ctx is done (timeout or cancellation).
+func (p *Pool) ScheduleWithContext(ctx context.Context, task TaskFunc) error {
+	return p.schedule(ctx, task)
+}
+
+// Release will terminate all workers, and force them finishing
+// what they are working on ASAP.
+func (p *Pool) Release() {
+	// only allow calling Release() once
+	p.stopOnce.Do(func() {
+		close(p.stopChan)
+		// trigger Minor waking up again
+		p.workerCond.Broadcast()
+		// wait for helper goroutines (Minor / Recycler) to stop
+		p.wg.Wait()
+		// wait for goroutines in Pool to stop
+		p.adjustWorkerSize(0, true)
+	})
+}
+
+// Workers returns the numbers of workers created.
+func (p *Pool) Workers() int {
+	p.workerMut.Lock()
+	defer p.workerMut.Unlock()
+
+	return len(p.workers)
+}
+
+// Running returns the number of workers running for tasks.
+func (p *Pool) Running() int {
+	return int(p.metric.BusyWorkers())
 }
 
 // force stands for forcing adjusting the size, only true in Release()
-func (p *pool) adjustWorkerSize(n int, force bool) {
+func (p *Pool) adjustWorkerSize(n int, force bool) {
 	p.workerMut.Lock()
 	defer p.workerMut.Unlock()
 
@@ -135,7 +166,7 @@ func (p *pool) adjustWorkerSize(n int, force bool) {
 	p.workers = p.workers[:n]
 }
 
-func (p *pool) allocWorker() *worker {
+func (p *Pool) allocWorker() *worker {
 	p.workerMut.Lock()
 	defer p.workerMut.Unlock()
 
@@ -164,7 +195,7 @@ func (p *pool) allocWorker() *worker {
 	return w
 }
 
-func (p *pool) schedule(ctx context.Context, task TaskFunc) error {
+func (p *Pool) schedule(ctx context.Context, task TaskFunc) error {
 	select {
 	case <-p.stopChan:
 		return ErrPoolRelease
@@ -202,46 +233,7 @@ func (p *pool) schedule(ctx context.Context, task TaskFunc) error {
 	}
 }
 
-func (p *pool) Schedule(task TaskFunc) error {
-	return p.schedule(context.Background(), task)
-}
-
-func (p *pool) ScheduleWithTimeout(timeout time.Duration, task TaskFunc) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	return p.schedule(ctx, task)
-}
-
-func (p *pool) ScheduleWithContext(ctx context.Context, task TaskFunc) error {
-	return p.schedule(ctx, task)
-}
-
-func (p *pool) Release() {
-	// only allow calling Release() once
-	p.stopOnce.Do(func() {
-		close(p.stopChan)
-		// trigger Minor waking up again
-		p.workerCond.Broadcast()
-		// wait for helper goroutines (Minor / Recycler) to stop
-		p.wg.Wait()
-		// wait for goroutines in Pool to stop
-		p.adjustWorkerSize(0, true)
-	})
-}
-
-func (p *pool) Workers() int {
-	p.workerMut.Lock()
-	defer p.workerMut.Unlock()
-
-	return len(p.workers)
-}
-
-func (p *pool) Running() int {
-	return int(p.metric.BusyWorkers())
-}
-
-func (p *pool) startMiner() {
+func (p *Pool) startMiner() {
 	p.wg.Add(1)
 
 	go func() {
@@ -275,7 +267,7 @@ func max(values []uint64) (max uint64) {
 	return max
 }
 
-func (p *pool) startRecycler(period time.Duration) {
+func (p *Pool) startRecycler(period time.Duration) {
 	p.wg.Add(1)
 	ticker := time.NewTicker(period)
 	windows := []uint64{0, 0, 0}

@@ -246,6 +246,7 @@ func (s *poolSuite) TestQueueFirstStrategy() {
 	}
 
 	wg.Wait()
+	time.Sleep(time.Millisecond * 20)
 	// initN+1, extra one is created by miner waiting for next request
 	s.Require().Equal(initN+1, p.Workers())
 	s.Require().Equal(0, p.Running())
