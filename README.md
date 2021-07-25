@@ -53,37 +53,37 @@ By calling `Schedule()`, it schedules the task to be executed by worker (gorouti
 It will be blocked until the workers accepting the request.
 
 ```go
-	taskN := 7
-	rets := make(chan int, taskN)
+taskN := 7
+rets := make(chan int, taskN)
 
-	// allocate a pool with 5 goroutines to deal with those tasks
-	p := goroutines.NewPool(5)
-	// don't forget to release the pool in the end
-	defer p.Release()
+// allocate a pool with 5 goroutines to deal with those tasks
+p := goroutines.NewPool(5)
+// don't forget to release the pool in the end
+defer p.Release()
 
-	// assign tasks to asynchronous goroutine pool
-	for i := 0; i < taskN; i++ {
-		idx := i
-		p.Schedule(func() {
-			// sleep and return the index
-			time.Sleep(20 * time.Millisecond)
-			rets <- idx
-		})
-	}
+// assign tasks to asynchronous goroutine pool
+for i := 0; i < taskN; i++ {
+	idx := i
+	p.Schedule(func() {
+		// sleep and return the index
+		time.Sleep(20 * time.Millisecond)
+		rets <- idx
+	})
+}
 
-	// wait until all tasks done
-	for i := 0; i < taskN; i++ {
-		fmt.Println("index:", <-rets)
-	}
+// wait until all tasks done
+for i := 0; i < taskN; i++ {
+	fmt.Println("index:", <-rets)
+}
 
-	// Unordered output:
-	// index: 3
-	// index: 1
-	// index: 2
-	// index: 4
-	// index: 5
-	// index: 6
-	// index: 0
+// Unordered output:
+// index: 3
+// index: 1
+// index: 2
+// index: 4
+// index: 5
+// index: 6
+// index: 0
 ```
 
 ### Basic usage of Pool in nonblocking mode
@@ -93,91 +93,91 @@ If it exceeds the time and doesn't be scheduled, it will return error `ErrSchedu
 
 ```go
 totalN, taskN := 5, 5
-	pause := make(chan struct{})
-	rets := make(chan int, taskN)
+pause := make(chan struct{})
+rets := make(chan int, taskN)
 
-	// allocate a pool with 5 goroutines to deal with those 5 tasks
-	p := goroutines.NewPool(totalN)
-	// don't forget to release the pool in the end
-	defer p.Release()
+// allocate a pool with 5 goroutines to deal with those 5 tasks
+p := goroutines.NewPool(totalN)
+// don't forget to release the pool in the end
+defer p.Release()
 
-	// full the workers which are stopped with the `pause`
-	for i := 0; i < taskN; i++ {
-		idx := i
-		p.ScheduleWithTimeout(50*time.Millisecond, func() {
-			<-pause
-			rets <- idx
-		})
-	}
-
-	// no more chance to add any task in Pool, and return `ErrScheduleTimeout`
-	if err := p.ScheduleWithTimeout(50*time.Millisecond, func() {
+// full the workers which are stopped with the `pause`
+for i := 0; i < taskN; i++ {
+	idx := i
+	p.ScheduleWithTimeout(50*time.Millisecond, func() {
 		<-pause
-		rets <- taskN
-	}); err != nil {
-		fmt.Println(err.Error())
-	}
+		rets <- idx
+	})
+}
 
-	close(pause)
-	for i := 0; i < taskN; i++ {
-		fmt.Println("index:", <-rets)
-	}
+// no more chance to add any task in Pool, and return `ErrScheduleTimeout`
+if err := p.ScheduleWithTimeout(50*time.Millisecond, func() {
+	<-pause
+	rets <- taskN
+}); err != nil {
+	fmt.Println(err.Error())
+}
 
-	// Unordered output:
-	// schedule timeout
-	// index: 0
-	// index: 3
-	// index: 2
-	// index: 4
-	// index: 1
+close(pause)
+for i := 0; i < taskN; i++ {
+	fmt.Println("index:", <-rets)
+}
+
+// Unordered output:
+// schedule timeout
+// index: 0
+// index: 3
+// index: 2
+// index: 4
+// index: 1
 ```
 ### Advanced usage of Batch jobs
 
 To deal with batch jobs and consider the performance, we need to run tasks concurrently. However, the use case only happen once and need not initialize a Pool for reusing it. I wrap this patten and call it `Batch`. Here comes an example.
 
 ```go
-	taskN := 11
+taskN := 11
 
-	// allocate a one-time batch job with 3 goroutines to deal with those tasks.
-	// no need to spawn extra goroutine by specifing the batch size consisting with the number of tasks.
-	b := goroutines.NewBatch(3, goroutines.WithBatchSize(taskN))
-	// don't forget to close batch job in the end
-	defer b.Close()
+// allocate a one-time batch job with 3 goroutines to deal with those tasks.
+// no need to spawn extra goroutine by specifing the batch size consisting with the number of tasks.
+b := goroutines.NewBatch(3, goroutines.WithBatchSize(taskN))
+// don't forget to close batch job in the end
+defer b.Close()
 
-	// pull all tasks to this batch queue
-	for i := 0; i < taskN; i++ {
-		idx := i
-		b.Queue(func() (interface{}, error) {
-			// sleep and return the index
-			time.Sleep(10 * time.Millisecond)
-			return idx, nil
-		})
+// pull all tasks to this batch queue
+for i := 0; i < taskN; i++ {
+	idx := i
+	b.Queue(func() (interface{}, error) {
+		// sleep and return the index
+		time.Sleep(10 * time.Millisecond)
+		return idx, nil
+	})
+}
+
+// tell the batch that's all need to do
+// DO NOT FORGET THIS OR GOROUTINES WILL DEADLOCK
+b.QueueComplete()
+
+for ret := range b.Results() {
+	if ret.Error() != nil {
+		panic("not expected")
 	}
 
-	// tell the batch that's all need to do
-	// DO NOT FORGET THIS OR GOROUTINES WILL DEADLOCK
-	b.QueueComplete()
+	fmt.Println("index:", ret.Value().(int))
+}
 
-	for ret := range b.Results() {
-		if ret.Error() != nil {
-			panic("not expected")
-		}
-
-		fmt.Println("index:", ret.Value().(int))
-	}
-
-	// Unordered output:
-	// index: 3
-	// index: 1
-	// index: 2
-	// index: 4
-	// index: 5
-	// index: 6
-	// index: 10
-	// index: 7
-	// index: 9
-	// index: 8
-	// index: 0
+// Unordered output:
+// index: 3
+// index: 1
+// index: 2
+// index: 4
+// index: 5
+// index: 6
+// index: 10
+// index: 7
+// index: 9
+// index: 8
+// index: 0
 ```
 
 See the [examples](https://pkg.go.dev/github.com/viney-shih/goroutines#pkg-examples), [documentation](https://pkg.go.dev/github.com/viney-shih/goroutines) and [article](https://medium.com/17media-tech/%E9%82%A3%E4%BA%9B%E5%B9%B4%E6%88%91%E5%80%91%E8%BF%BD%E7%9A%84-goroutine-pool-e8d211757ee) for more details.
