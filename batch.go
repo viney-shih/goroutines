@@ -92,7 +92,8 @@ func NewBatch(size int, options ...BatchOption) *Batch {
 }
 
 // Queue plays as a producer to queue a task into pool, and
-// starts processing immediately
+// starts processing immediately.
+//
 // HINT: make sure not to call QueueComplete concurrently
 func (b *Batch) Queue(fn BatchFunc) error {
 	return b.queue(context.Background(), fn)
@@ -100,6 +101,7 @@ func (b *Batch) Queue(fn BatchFunc) error {
 
 // QueueWithContext plays as a producer to queue a task into pool, or
 // return ErrQueueCTXDone due to ctx is done (timeout or cancellation).
+//
 // HINT: make sure not to call QueueComplete concurrently
 func (b *Batch) QueueWithContext(ctx context.Context, fn BatchFunc) error {
 	return b.queue(ctx, fn)
