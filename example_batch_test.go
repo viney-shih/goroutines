@@ -11,7 +11,7 @@ func ExampleBatch_Queue_default() {
 	taskN := 14
 
 	// allocate a one-time batch job with 3 goroutines to deal with those tasks.
-	// need to spawn extra goroutine to prevent deadlocks.
+	// need to spawn an extra goroutine to prevent deadlocks.
 	b := goroutines.NewBatch(3)
 	// don't forget to close batch job in the end
 	defer b.Close()

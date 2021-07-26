@@ -82,13 +82,13 @@ func NewPool(size int, options ...PoolOption) *Pool {
 	return &p
 }
 
-// Schedule schedules the task to be executed by worker (goroutines) in the Pool.
+// Schedule schedules the task executed by worker (goroutines) in the Pool.
 // It will be blocked until the works accepting the request.
 func (p *Pool) Schedule(task TaskFunc) error {
 	return p.schedule(context.Background(), task)
 }
 
-// ScheduleWithTimeout schedules the task to be executed by worker (goroutines)
+// ScheduleWithTimeout schedules the task executed by worker (goroutines)
 // in the Pool within the specified period. Or return ErrScheduleTimeout.
 func (p *Pool) ScheduleWithTimeout(timeout time.Duration, task TaskFunc) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -97,7 +97,7 @@ func (p *Pool) ScheduleWithTimeout(timeout time.Duration, task TaskFunc) error {
 	return p.schedule(ctx, task)
 }
 
-// ScheduleWithContext schedules the task to be executed by worker (goroutines)
+// ScheduleWithContext schedules the task executed by worker (goroutines)
 // in the Pool. It will be blocked until works accepting the request, or
 // return ErrScheduleTimeout because ctx is done (timeout or cancellation).
 func (p *Pool) ScheduleWithContext(ctx context.Context, task TaskFunc) error {

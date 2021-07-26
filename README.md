@@ -49,7 +49,7 @@ go get github.com/viney-shih/goroutines
 ## Get Started
 ### Basic usage of Pool in blocking mode
 
-By calling `Schedule()`, it schedules the task to be executed by worker (goroutines) in the Pool.
+By calling `Schedule()`, it schedules the task executed by worker (goroutines) in the Pool.
 It will be blocked until the workers accepting the request.
 
 ```go
@@ -88,8 +88,8 @@ for i := 0; i < taskN; i++ {
 
 ### Basic usage of Pool in nonblocking mode
 
-By calling `ScheduleWithTimeout()`, it schedules the task to be executed by worker (goroutines) in the Pool within the specified period.
-If it exceeds the time and doesn't be scheduled, it will return error `ErrScheduleTimeout`.
+By calling `ScheduleWithTimeout()`, it schedules the task executed by worker (goroutines) in the Pool within the specified period.
+If it exceeds the time and doesn't be accepted, it will return error `ErrScheduleTimeout`.
 
 ```go
 totalN, taskN := 5, 5
@@ -133,7 +133,7 @@ for i := 0; i < taskN; i++ {
 ```
 ### Advanced usage of Batch jobs
 
-To deal with batch jobs and consider the performance, we need to run tasks concurrently. However, the use case only happen once and need not initialize a Pool for reusing it. I wrap this patten and call it `Batch`. Here comes an example.
+To deal with batch jobs and consider the performance, we need to run tasks concurrently. However, the use case usually happen once and need not maintain a Pool for reusing it. I wrap this patten and call it `Batch`. Here comes an example.
 
 ```go
 taskN := 11
@@ -186,24 +186,26 @@ See the [examples](https://pkg.go.dev/github.com/viney-shih/goroutines#pkg-examp
 ### PoolOption
 The `PoolOption` interface is passed to `NewPool` when creating Pool.
 
-**WithTaskQueueLength(** ***length*** `int` **)**
+**• WithTaskQueueLength(** ***length*** `int` **)**
 
-It sets up the length of task queue for buffering tasks before sending to goroutines. By default is `0`.
+It sets up the length of task queue for buffering tasks before sending to goroutines. The default queue length is `0`.
 
-**WithPreAllocWorkers(** ***size*** `int` **)**
+**• WithPreAllocWorkers(** ***size*** `int` **)**
 
-It sets up the number of workers to spawn when initializing Pool. It initialize all numbers of goroutines consisting with Pool size at the beginning without specifying this.
+It sets up the number of workers to spawn when initializing Pool. Without specifying this, It initialize all numbers of goroutines consisting with Pool size at the beginning.
 
-**WithWorkerAdjustPeriod(** ***period*** `time.Duration` **)**
+**• WithWorkerAdjustPeriod(** ***period*** `time.Duration` **)**
 
 It sets up the duration to adjust the worker size, and needs to be used with `WithPreAllocWorkers` at the same time. By specifying both, it enables the mechanism to adjust the number of goroutines according to the usage dynamically.
 
 ### BatchOption
 The `BatchOption` interface is passed to `NewBatch` when creating Batch.
 
-**WithBatchSize(** ***size*** `int` **)**
+**• WithBatchSize(** ***size*** `int` **)**
 
-It specifies the batch size used to forward tasks. If it is bigger enough, no more need to fork another goroutine to trigger `Queue()` (see the [example](https://pkg.go.dev/github.com/viney-shih/goroutines#pkg-examples)). The default batch size is `10`.
+It specifies the batch size used to forward tasks.
+By default, it needs to spawn an extra goroutine to prevent deadlocks.
+It's helpful by specifing the batch size consisting with the number of tasks without an extra goroutine (see the [example](https://pkg.go.dev/github.com/viney-shih/goroutines#pkg-examples)). The default batch size is `10`.
 
 ## References
 - https://github.com/faceair/fastsocket
