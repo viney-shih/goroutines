@@ -17,7 +17,7 @@ var (
 // TaskFunc is the task function assigned by caller, running in the goroutine pool
 type TaskFunc func()
 
-// Pool is the sturct handling the interacetion with asynchronous goroutines
+// Pool is the struct handling the interacetion with asynchronous goroutines
 type Pool struct {
 	initN         int
 	totalN        int
